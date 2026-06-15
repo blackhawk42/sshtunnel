@@ -2,11 +2,17 @@
 
 import argparse
 import getpass
+import io
 import signal
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Iterable, Union
+from pathlib import Path
+from typing import Iterable
+
+import tomllib
+
+CONFIG_FILE_NAME = Path("sshtunnel.toml")
 
 
 @dataclass
@@ -28,6 +34,50 @@ def parse_forward(s: str) -> PortForward:
     )
 
 
+def find_config(args_config: Path | None) -> Path | None:
+    if args_config is not None:
+        if args_config.exists():
+            return args_config
+        print(f"error: config file not found: {args_config}", file=sys.stderr)
+        sys.exit(1)
+
+    paths = [
+        Path(__file__).resolve().parent / CONFIG_FILE_NAME,
+        Path.home() / ".config" / CONFIG_FILE_NAME,
+        Path.home() / ("." + CONFIG_FILE_NAME.name),
+    ]
+    for p in paths:
+        if p.exists():
+            return p
+
+    return None
+
+
+def toml_port_forward(toml_fwd: dict) -> PortForward:
+    return PortForward(
+        localPort=toml_fwd["local_port"],
+        remotePort=toml_fwd["remote_port"],
+        remoteAddress=toml_fwd.get("remote_address", "localhost"),
+    )
+
+
+def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
+    data = tomllib.load(config_file)
+    ssh_cfg = data.get("ssh", {})
+
+    if args.host is None and "host" in ssh_cfg:
+        args.host = ssh_cfg["host"]
+    if args.user is None and "user" in ssh_cfg:
+        args.user = ssh_cfg["user"]
+    if args.port == 22 and "port" in ssh_cfg:
+        args.port = ssh_cfg["port"]
+    if args.no_shell == False and "no_shell" in ssh_cfg:
+        args.no_shell = ssh_cfg["no_shell"]
+
+    toml_forwards = [toml_port_forward(fwd) for fwd in data.get("forwards", [])]
+    args.forwards = toml_forwards + args.forwards
+
+
 def build_command(
     serverAddress: str,
     user: str,
@@ -36,7 +86,7 @@ def build_command(
     asList: bool = True,
     addExe: bool = False,
     noShell: bool = False,
-) -> Union[str, list[str]]:
+) -> str | list[str]:
     command = ["ssh.exe"] if addExe else ["ssh"]
 
     if noShell:
@@ -58,7 +108,9 @@ def main():
     argParser = argparse.ArgumentParser(
         description="Open a series of ssh local tunnels"
     )
-    argParser.add_argument("-u", "--user", help="SSH username")
+    argParser.add_argument(
+        "-u", "--user", help="SSH username (default: autodetected by getpass.getuser())"
+    )
     argParser.add_argument("--host", help="SSH server address")
     argParser.add_argument(
         "-p", "--port", type=int, default=22, help="SSH server port (default: 22)"
@@ -78,7 +130,17 @@ def main():
     argParser.add_argument(
         "--print", action="store_true", help="Print the command instead of executing it"
     )
+    argParser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to TOML configuration file",
+    )
     args = argParser.parse_args()
+
+    config_path = find_config(args.config)
+    if config_path is not None:
+        with config_path.open("rb") as f:
+            apply_config(args, f)
 
     user = args.user or getpass.getuser()
     if not args.host:

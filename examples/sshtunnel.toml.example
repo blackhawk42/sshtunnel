@@ -1,0 +1,17 @@
+[ssh]
+host = "myserver.example.com"
+# Optional if you want to autodetect it.
+#user = "myuser"
+port = 22
+no_shell = true
+
+[[forwards]]
+local_port = 8080
+remote_port = 80
+# Optional if value is localhost
+#remote_address = "localhost"
+
+[[forwards]]
+local_port = 3306
+remote_port = 3306
+remote_address = "db.internal"
