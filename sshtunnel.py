@@ -70,12 +70,12 @@ def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
         args.host = ssh_cfg["host"]
     if args.user is None and "user" in ssh_cfg:
         args.user = ssh_cfg["user"]
-    if args.port == 22 and "port" in ssh_cfg:
+    if args.port is None and "port" in ssh_cfg:
         args.port = ssh_cfg["port"]
     if not args.no_shell and "no_shell" in ssh_cfg:
         args.no_shell = ssh_cfg["no_shell"]
-    if not args.verbose and ssh_cfg.get("verbose", False):
-        args.verbose = True
+    if not args.verbose and "verbose" in ssh_cfg:
+        args.verbose = ssh_cfg["verbose"]
 
     toml_forwards = [toml_port_forward(fwd) for fwd in data.get("forwards", [])]
     args.forwards = toml_forwards + args.forwards
@@ -116,7 +116,7 @@ def main():
     )
     argParser.add_argument("--host", help="SSH server address")
     argParser.add_argument(
-        "-p", "--port", type=int, default=22, help="SSH server port (default: 22)"
+        "-p", "--port", type=int, default=None, help="SSH server port (default: 22)"
     )
     argParser.add_argument(
         "-L",
@@ -160,6 +160,8 @@ def main():
         logging.info("no config file found")
 
     user = args.user or getpass.getuser()
+    if args.port is None:
+        args.port = 22
     if not args.host:
         argParser.error("a host needs to be set")
 
