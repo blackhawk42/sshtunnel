@@ -23,7 +23,7 @@ class PortForward:
     remoteAddress: str = "localhost"
 
 
-def parse_forward(s: str) -> PortForward:
+def cli_port_forward(s: str) -> PortForward:
     parts = s.split(":")
     localPort = int(parts[0])
     remotePort = int(parts[-1])
@@ -32,6 +32,14 @@ def parse_forward(s: str) -> PortForward:
         localPort=localPort,
         remotePort=remotePort,
         remoteAddress=remoteAddress,
+    )
+
+
+def toml_port_forward(toml_fwd: dict) -> PortForward:
+    return PortForward(
+        localPort=toml_fwd["local_port"],
+        remotePort=toml_fwd["remote_port"],
+        remoteAddress=toml_fwd.get("remote_address", "localhost"),
     )
 
 
@@ -52,14 +60,6 @@ def find_config(args_config: Path | None) -> Path | None:
             return p
 
     return None
-
-
-def toml_port_forward(toml_fwd: dict) -> PortForward:
-    return PortForward(
-        localPort=toml_fwd["local_port"],
-        remotePort=toml_fwd["remote_port"],
-        remoteAddress=toml_fwd.get("remote_address", "localhost"),
-    )
 
 
 def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
@@ -124,7 +124,7 @@ def main():
         action="append",
         dest="forwards",
         default=[],
-        type=parse_forward,
+        type=cli_port_forward,
         help="Port forward in either localPort:remoteAddress:remotePort or localPort:remotePort (remoteAddress is localhost) formats (repeatable)",
     )
     argParser.add_argument(
@@ -139,7 +139,8 @@ def main():
         help="Path to TOML configuration file",
     )
     argParser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose logging",
     )
@@ -167,7 +168,11 @@ def main():
 
     logging.info(
         "host=%s, user=%s, port=%s, no_shell=%s, forwards=%s",
-        args.host, user, args.port, args.no_shell, args.forwards,
+        args.host,
+        user,
+        args.port,
+        args.no_shell,
+        args.forwards,
     )
 
     command = build_command(
