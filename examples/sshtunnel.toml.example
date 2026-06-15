@@ -4,6 +4,7 @@ host = "myserver.example.com"
 #user = "myuser"
 port = 22
 no_shell = true
+verbose = false
 
 [[forwards]]
 local_port = 8080

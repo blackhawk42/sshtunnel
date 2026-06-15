@@ -3,6 +3,7 @@
 import argparse
 import getpass
 import io
+import logging
 import signal
 import subprocess
 import sys
@@ -38,7 +39,7 @@ def find_config(args_config: Path | None) -> Path | None:
     if args_config is not None:
         if args_config.exists():
             return args_config
-        print(f"error: config file not found: {args_config}", file=sys.stderr)
+        logging.error("config file not found: %s", args_config)
         sys.exit(1)
 
     paths = [
@@ -71,8 +72,10 @@ def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
         args.user = ssh_cfg["user"]
     if args.port == 22 and "port" in ssh_cfg:
         args.port = ssh_cfg["port"]
-    if args.no_shell == False and "no_shell" in ssh_cfg:
+    if not args.no_shell and "no_shell" in ssh_cfg:
         args.no_shell = ssh_cfg["no_shell"]
+    if not args.verbose and ssh_cfg.get("verbose", False):
+        args.verbose = True
 
     toml_forwards = [toml_port_forward(fwd) for fwd in data.get("forwards", [])]
     args.forwards = toml_forwards + args.forwards
@@ -135,16 +138,35 @@ def main():
         type=Path,
         help="Path to TOML configuration file",
     )
+    argParser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose logging",
+    )
     args = argParser.parse_args()
+
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
     config_path = find_config(args.config)
     if config_path is not None:
         with config_path.open("rb") as f:
             apply_config(args, f)
+        if args.verbose:
+            logging.getLogger().setLevel(logging.INFO)
+        logging.info("using config file: %s", config_path)
+    else:
+        if args.verbose:
+            logging.getLogger().setLevel(logging.INFO)
+        logging.info("no config file found")
 
     user = args.user or getpass.getuser()
     if not args.host:
         argParser.error("a host needs to be set")
+
+    logging.info(
+        "host=%s, user=%s, port=%s, no_shell=%s, forwards=%s",
+        args.host, user, args.port, args.no_shell, args.forwards,
+    )
 
     command = build_command(
         serverAddress=args.host,
@@ -158,6 +180,7 @@ def main():
         print(" ".join(command))
         return
 
+    logging.info("executing: %s", " ".join(command))
     process = subprocess.Popen(command)
 
     def cleanup(signum, frame):
