@@ -76,6 +76,8 @@ def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
         args.no_shell = ssh_cfg["no_shell"]
     if not args.verbose and "verbose" in ssh_cfg:
         args.verbose = ssh_cfg["verbose"]
+    if not args.exe and "exe" in ssh_cfg:
+        args.exe = ssh_cfg["exe"]
 
     toml_forwards = [toml_port_forward(fwd) for fwd in data.get("forwards", [])]
     args.forwards = toml_forwards + args.forwards
@@ -131,6 +133,11 @@ def main():
         "-N", "--no-shell", action="store_true", help="Add -N flag (no remote shell)"
     )
     argParser.add_argument(
+        "--exe",
+        action="store_true",
+        help='add a ".exe" to the final command, sometimes useful on Windows',
+    )
+    argParser.add_argument(
         "--print", action="store_true", help="Print the command instead of executing it"
     )
     argParser.add_argument(
@@ -181,6 +188,7 @@ def main():
         forwards=args.forwards,
         serverPort=args.port,
         noShell=args.no_shell,
+        addExe=args.exe,
     )
 
     if args.print:

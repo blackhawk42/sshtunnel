@@ -5,6 +5,7 @@ host = "myserver.example.com"
 port = 22
 no_shell = true
 verbose = false
+exe = false
 
 [[forwards]]
 local_port = 8080
