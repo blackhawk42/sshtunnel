@@ -78,6 +78,8 @@ def apply_config(args: argparse.Namespace, config_file: io.IOBase) -> None:
         args.verbose = ssh_cfg["verbose"]
     if not args.exe and "exe" in ssh_cfg:
         args.exe = ssh_cfg["exe"]
+    if args.host_file is None and "host_file" in ssh_cfg:
+        args.host_file = Path(ssh_cfg["host_file"])
 
     toml_forwards = [toml_port_forward(fwd) for fwd in data.get("forwards", [])]
     args.forwards = toml_forwards + args.forwards
@@ -109,6 +111,25 @@ def build_command(
         return " ".join(command)
 
 
+def read_host_file(host_file: Path) -> str | None:
+    if not host_file.exists():
+        logging.error("host file not found: %s", host_file)
+        return None
+
+    try:
+        with host_file.open(encoding="utf-8-sig") as f:
+            host_from_file = f.readline().strip()
+    except Exception as e:
+        logging.error("error while reading host file %s: %s", host_file, e)
+        return None
+
+    if host_from_file == "":
+        logging.error("first line of host file is empty: %s", host_file)
+        return None
+
+    return host_from_file
+
+
 def main():
     argParser = argparse.ArgumentParser(
         description="Open a series of ssh local tunnels"
@@ -117,6 +138,11 @@ def main():
         "-u", "--user", help="SSH username (default: autodetected by getpass.getuser())"
     )
     argParser.add_argument("--host", help="SSH server address")
+    argParser.add_argument(
+        "--host-file",
+        type=Path,
+        help="Path to a file whose first line contains the SSH server address",
+    )
     argParser.add_argument(
         "-p", "--port", type=int, default=None, help="SSH server port (default: 22)"
     )
@@ -155,6 +181,9 @@ def main():
 
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
+    cli_host_was_set = args.host is not None
+    cli_host_file_was_set = args.host_file is not None
+
     config_path = find_config(args.config)
     if config_path is not None:
         with config_path.open("rb") as f:
@@ -167,11 +196,29 @@ def main():
             logging.getLogger().setLevel(logging.INFO)
         logging.info("no config file found")
 
+    # Priority: host (CLI) → host file (CLI) → host (TOML) → host file (TOML)
+    if cli_host_was_set:
+        # host was provided via CLI → use it directly
+        pass
+    elif cli_host_file_was_set:
+        # host file was provided via CLI → read host from file
+        args.host = read_host_file(args.host_file)
+        if args.host is None:
+            sys.exit(1)
+    elif args.host is not None:
+        # host was provided via TOML → use it directly
+        pass
+    elif args.host_file is not None:
+        # host file was provided via TOML → read host from file
+        args.host = read_host_file(args.host_file)
+        if args.host is None:
+            sys.exit(1)
+    else:
+        argParser.error("either a host or a host file should be provided")
+
     user = args.user or getpass.getuser()
     if args.port is None:
         args.port = 22
-    if not args.host:
-        argParser.error("a host needs to be set")
 
     logging.info(
         "host=%s, user=%s, port=%s, no_shell=%s, forwards=%s",

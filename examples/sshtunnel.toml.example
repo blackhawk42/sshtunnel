@@ -1,5 +1,8 @@
 [ssh]
 host = "myserver.example.com"
+# host always has priority over host_file
+host_file = "/path/to/file/"
+
 # Optional if you want to autodetect it.
 #user = "myuser"
 port = 22
