@@ -52,7 +52,7 @@ def find_config(args_config: Path | None) -> Path | None:
 
     paths = [
         Path(__file__).resolve().parent / CONFIG_FILE_NAME,
-        Path.home() / ".config" / CONFIG_FILE_NAME,
+        Path.home() / ".config" / "sshtunnel" / CONFIG_FILE_NAME,
         Path.home() / ("." + CONFIG_FILE_NAME.name),
     ]
     for p in paths:
